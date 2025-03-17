@@ -1,0 +1,579 @@
+.pools-page {
+  min-height: calc(100vh - 180px);
+  padding: 4rem 2rem;
+  background: linear-gradient(135deg, #05050f, #0a1020);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: rgba(0, 255, 255, 0.1);
+    border-radius: 50%;
+    filter: blur(150px);
+    top: -200px;
+    right: -200px;
+    z-index: 0;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: rgba(255, 0, 255, 0.1);
+    border-radius: 50%;
+    filter: blur(150px);
+    bottom: -200px;
+    left: -200px;
+    z-index: 0;
+  }
+}
+
+.pools-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.pools-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+
+  h1 {
+    font-size: 2.5rem;
+    color: #fff;
+    margin: 0;
+    background: linear-gradient(90deg, #00ffff, #ff00ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .pools-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .sort-options {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    span {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.9rem;
+    }
+
+    button {
+      background: transparent;
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      border-radius: 4px;
+      padding: 0.3rem 0.8rem;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: rgba(0, 255, 255, 0.5);
+        color: #00ffff;
+      }
+
+      &.active {
+        background: rgba(0, 255, 255, 0.1);
+        border-color: #00ffff;
+        color: #00ffff;
+      }
+    }
+  }
+
+  .filter-option {
+    label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+
+      input[type="checkbox"] {
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border: 1px solid rgba(0, 255, 255, 0.5);
+        border-radius: 3px;
+        background: transparent;
+        position: relative;
+        cursor: pointer;
+
+        &:checked {
+          background: rgba(0, 255, 255, 0.8);
+
+          &::after {
+            content: "✓";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #000;
+            font-size: 12px;
+            font-weight: bold;
+          }
+        }
+      }
+
+      span {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+      }
+    }
+  }
+
+  .refresh-button {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 0.3rem 0.8rem;
+    color: #00ffff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(0, 255, 255, 0.1);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+.connect-prompt {
+  text-align: center;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+
+  p {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.2rem;
+    margin: 0;
+  }
+}
+
+.error-message {
+  background: rgba(255, 59, 108, 0.1);
+  border: 1px solid rgba(255, 59, 108, 0.3);
+  padding: 1rem;
+  border-radius: 8px;
+  color: #ff3b6c;
+  text-align: center;
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.pools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 2rem;
+}
+
+.pool-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-5px);
+    border-color: rgba(0, 255, 255, 0.4);
+    box-shadow: 0 10px 25px rgba(0, 255, 255, 0.05);
+  }
+}
+
+.pool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+
+  h3 {
+    font-size: 1.3rem;
+    color: #fff;
+    margin: 0;
+  }
+
+  .pool-badges {
+    display: flex;
+    gap: 0.5rem;
+
+    .your-pool-badge {
+      background: linear-gradient(45deg, #00ffff, #0088ff);
+      color: #000;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 20px;
+    }
+  }
+}
+
+.pool-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #00ffff;
+    }
+  }
+}
+
+.pool-assets {
+  margin-bottom: 1.5rem;
+
+  h4 {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-top: 0;
+    margin-bottom: 0.8rem;
+  }
+
+  .assets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .asset-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.8rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+
+    .asset-symbol {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .asset-info {
+      display: flex;
+      gap: 1rem;
+
+      .asset-weight {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+      }
+
+      .asset-balance {
+        color: rgba(0, 255, 255, 0.8);
+        font-size: 0.9rem;
+      }
+    }
+  }
+}
+
+.your-position {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 255, 0.1);
+
+  h4 {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-top: 0;
+    margin-bottom: 0.8rem;
+  }
+
+  .position-info {
+    display: flex;
+    justify-content: space-between;
+
+    span:first-child {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    span:last-child {
+      color: #00ffff;
+      font-weight: 600;
+    }
+  }
+}
+
+.pool-actions {
+  .default-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+
+    button {
+      padding: 0.8rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+
+    .deposit-button {
+      background: linear-gradient(45deg, #00ffff, #0088ff);
+      border: none;
+      color: #000;
+
+      &:hover:not(:disabled) {
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+      }
+    }
+
+    .withdraw-button {
+      background: transparent;
+      border: 1px solid rgba(0, 255, 255, 0.5);
+      color: #00ffff;
+
+      &:hover:not(:disabled) {
+        background: rgba(0, 255, 255, 0.1);
+      }
+    }
+  }
+
+  .active-actions {
+    .action-tabs {
+      display: flex;
+      margin-bottom: 1rem;
+
+      .tab {
+        flex: 1;
+        padding: 0.8rem;
+        text-align: center;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &:hover:not(:disabled) {
+          color: #fff;
+        }
+
+        &.active {
+          border-bottom: 2px solid #00ffff;
+          color: #00ffff;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .deposit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .deposit-input {
+      .input-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.3rem;
+
+        span {
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.7);
+        }
+
+        .balance {
+          font-size: 0.8rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+
+          &:hover {
+            color: #00ffff;
+          }
+        }
+      }
+
+      .input-group {
+        display: flex;
+        align-items: center;
+
+        input {
+          flex: 1;
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid rgba(0, 255, 255, 0.2);
+          border-radius: 6px;
+          padding: 0.6rem;
+          color: #fff;
+          font-size: 1rem;
+          outline: none;
+
+          &:focus {
+            border-color: rgba(0, 255, 255, 0.5);
+          }
+
+          &::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+          }
+        }
+
+        .max-button {
+          background: transparent;
+          border: none;
+          color: rgba(0, 255, 255, 0.8);
+          padding: 0.3rem 0.5rem;
+          margin-left: 0.5rem;
+          font-size: 0.8rem;
+          cursor: pointer;
+
+          &:hover {
+            color: #00ffff;
+          }
+        }
+      }
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+
+      button {
+        padding: 0.8rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .cancel-button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: rgba(255, 255, 255, 0.8);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+      }
+
+      .confirm-button {
+        background: linear-gradient(45deg, #00ffff, #0088ff);
+        border: none;
+        color: #000;
+
+        &:hover:not(:disabled) {
+          box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
+    }
+  }
+}
+.loading-pools,
+.no-pools {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.2rem;
+}
+
+@media (max-width: 768px) {
+  .pools-page {
+    padding: 2rem 1rem;
+  }
+
+  .pools-header {
+    flex-direction: column;
+    align-items: flex-start;
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    .pools-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
+
+  .pools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-stats {
+    gap: 0.5rem;
+
+    .stat-item {
+      .stat-value {
+        font-size: 1rem;
+      }
+    }
+  }
+
+  .pool-assets {
+    .asset-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+
+      .asset-info {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+  }
+
+  .pool-actions {
+    .default-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .active-actions {
+      .action-buttons {
+        grid-template-columns: 1fr;
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "aftermath-swap-backend",
+  "version": "1.0.0",
+  "description": "Backend server for handling Aftermath SDK swap transactions",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "sui",
+    "aftermath",
+    "blockchain",
+    "swap",
+    "defi"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aftermath-ts-sdk": "^1.2.53",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
