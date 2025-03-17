@@ -1,3 +1,5 @@
+// contexts/walletcontext.tsx
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useWallet } from "@suiet/wallet-kit";
 import axios from "axios";
@@ -5,8 +7,6 @@ import { CoinBalance } from "../types";
 
 // Constants
 const SUI_MAINNET_RPC_URL = "https://fullnode.mainnet.sui.io";
-
-// We'll just use CoinGecko since it's the only one working
 const PRICE_API =
   "https://api.coingecko.com/api/v3/simple/price?ids=sui,ethereum,bitcoin,usd-coin,tether&vs_currencies=usd";
 
@@ -55,7 +55,7 @@ const COIN_TYPE_TO_ID = {
     "bitcoin",
 };
 
-// Map from ID to coinType (reverse of COIN_TYPE_TO_ID)
+// Reverse map from ID to coin type
 const ID_TO_COIN_TYPE: Record<string, string> = {};
 Object.entries(COIN_TYPE_TO_ID).forEach(([coinType, id]) => {
   ID_TO_COIN_TYPE[id] = coinType;
@@ -69,6 +69,7 @@ interface WalletContextType {
   };
   refreshBalances: () => void;
   coinPrices: Record<string, number>;
+  availableCoins: string[];
   formatBalance: (
     balance: bigint,
     decimals: number,
@@ -86,6 +87,8 @@ export const useWalletContext = () => {
   }
   return context;
 };
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 // Temporary default coins for development/testing
 const getDefaultCoins = (address: string) => [
@@ -110,6 +113,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
   const [totalUsdValue, setTotalUsdValue] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [coinPrices, setCoinPrices] = useState<Record<string, number>>({});
+  const [availableCoins, setAvailableCoins] = useState<string[]>([]);
 
   // Format balance with up to 5 decimal places by default
   const formatBalance = (
@@ -118,20 +122,16 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
     displayDecimals: number = 5
   ): string => {
     const balanceNumber = Number(balance) / Math.pow(10, decimals);
-
-    // For small values (less than 0.00001), use scientific notation
     if (balanceNumber > 0 && balanceNumber < 0.00001) {
       return balanceNumber.toExponential(2);
     }
-
-    // Format with the specified number of decimal places
     return balanceNumber.toLocaleString("en-US", {
       minimumFractionDigits: 0,
       maximumFractionDigits: displayDecimals,
     });
   };
 
-  // Format USD value with 2 decimal places and $ symbol
+  // Format USD value with 2 decimal places and a $ symbol
   const formatUsd = (amount: number): string => {
     return amount.toLocaleString("en-US", {
       style: "currency",
@@ -141,33 +141,36 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
+  // Fetch coin prices from CoinGecko
   const fetchCoinPrices = async () => {
     try {
-      console.log(`Trying to fetch prices from: ${PRICE_API}`);
       const response = await axios.get(PRICE_API);
       const data = response.data;
-
-      // Map CoinGecko prices to coin types
       const prices: Record<string, number> = {};
-
       Object.entries(data).forEach(([id, priceData]: [string, any]) => {
         const coinType = ID_TO_COIN_TYPE[id];
         if (coinType && priceData.usd) {
           prices[coinType] = priceData.usd;
         }
       });
-
       if (Object.keys(prices).length > 0) {
-        console.log("Fetched prices:", prices);
         setCoinPrices(prices);
         return prices;
       }
-
-      console.log("No prices found in CoinGecko response");
       return {};
     } catch (error) {
-      console.error(`Error fetching coin prices:`, error);
+      console.error("Error fetching coin prices:", error);
       return {};
+    }
+  };
+
+  // Fetch available coins (supported coin types) from the backend
+  const fetchAvailableCoins = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/supportedCoins`);
+      setAvailableCoins(response.data.supportedCoins);
+    } catch (error) {
+      console.error("Error fetching available coins:", error);
     }
   };
 
@@ -177,80 +180,51 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
       setTotalUsdValue(null);
       return;
     }
-
     setLoading(true);
     try {
-      // Try to get coins from the wallet
       let coins: any[] = [];
-
       try {
-        // Try using the wallet kit's getCoins method first
         if (typeof getCoins === "function") {
-          console.log("Using getCoins from wallet kit");
           coins = await getCoins();
-        }
-        // Fallback to window.suiet if available
-        else if (window.suiet && typeof window.suiet.getCoins === "function") {
-          console.log("Using window.suiet.getCoins");
+        } else if (
+          window.suiet &&
+          typeof window.suiet.getCoins === "function"
+        ) {
           coins = await window.suiet.getCoins();
         }
       } catch (err) {
         console.error("Error getting coins from wallet:", err);
       }
-
-      console.log("Raw wallet coins:", coins);
-
-      // If no coins could be retrieved from the wallet API,
-      // use default coins for testing UI
       if (!coins || !Array.isArray(coins) || coins.length === 0) {
-        console.log(
-          "No coins found in wallet, using default coins for UI testing"
-        );
         if (account) {
           coins = getDefaultCoins(account.address);
         }
       }
-
-      // Group coins by type and aggregate balances
       const balancesByType: Record<
         string,
         { balance: bigint; metadata?: any }
       > = {};
-
       for (const coin of coins) {
         if (!coin || (!coin.type && !coin.coinType)) continue;
-
         const coinType = coin.type || coin.coinType;
         const balance = BigInt(coin.balance || coin.value || 0);
-
         if (!balancesByType[coinType]) {
-          balancesByType[coinType] = {
-            balance: BigInt(0),
-            metadata: null,
-          };
+          balancesByType[coinType] = { balance: BigInt(0), metadata: null };
         }
-
-        balancesByType[coinType].balance =
-          balancesByType[coinType].balance + balance;
-
-        // Store metadata if available
+        balancesByType[coinType].balance += balance;
         if (!balancesByType[coinType].metadata && KNOWN_COINS[coinType]) {
           balancesByType[coinType].metadata = KNOWN_COINS[coinType];
         }
       }
-
-      // Format balances
       const formattedBalances: CoinBalance[] = [];
       for (const [coinType, data] of Object.entries(balancesByType)) {
         if (data.balance > BigInt(0)) {
-          // Use known coin data or fallback
           const metadata = data.metadata ||
             KNOWN_COINS[coinType] || {
               symbol: coinType.split("::").pop() || "UNKNOWN",
               name: "Unknown Coin",
-              decimals: 9, // Default to 9 decimals if unknown
+              decimals: 9,
             };
-
           formattedBalances.push({
             coinType,
             symbol: metadata.symbol,
@@ -260,14 +234,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
           });
         }
       }
-
-      // Get current prices if needed
       const prices =
         Object.keys(coinPrices).length > 0
           ? coinPrices
           : await fetchCoinPrices();
-
-      // Calculate total USD value
       let total = 0;
       for (const balance of formattedBalances) {
         const price = prices[balance.coinType] || 0;
@@ -275,19 +245,13 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
           Number(balance.balance) / Math.pow(10, balance.decimals);
         total += balanceWithDecimals * price;
       }
-
-      // Sort balances by USD value
       formattedBalances.sort((a, b) => {
         const aPrice = prices[a.coinType] || 0;
         const bPrice = prices[b.coinType] || 0;
         const aValue = (Number(a.balance) / Math.pow(10, a.decimals)) * aPrice;
         const bValue = (Number(b.balance) / Math.pow(10, b.decimals)) * bPrice;
-        return bValue - aValue; // Sort by value descending
+        return bValue - aValue;
       });
-
-      console.log("Formatted balances:", formattedBalances);
-      console.log("Total USD value:", formatUsd(total));
-
       setBalances(formattedBalances);
       setTotalUsdValue(total);
     } catch (error) {
@@ -299,24 +263,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     fetchCoinPrices();
-
-    // Set up interval to refresh prices every 5 minutes
-    const priceInterval = setInterval(() => {
-      fetchCoinPrices();
-    }, 5 * 60 * 1000); // 5 minutes
-
+    fetchAvailableCoins();
+    const priceInterval = setInterval(fetchCoinPrices, 5 * 60 * 1000);
     return () => clearInterval(priceInterval);
   }, []);
 
   useEffect(() => {
     if (connected && account) {
       fetchBalances();
-
-      // Set up interval to refresh balances every minute when connected
-      const balanceInterval = setInterval(() => {
-        fetchBalances();
-      }, 60 * 1000); // 1 minute
-
+      const balanceInterval = setInterval(fetchBalances, 60 * 1000);
       return () => clearInterval(balanceInterval);
     } else {
       setBalances([]);
@@ -325,13 +280,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [connected, account]);
 
   const value = {
-    walletState: {
-      balances,
-      totalUsdValue,
-      loading,
-    },
+    walletState: { balances, totalUsdValue, loading },
     refreshBalances: fetchBalances,
     coinPrices,
+    availableCoins,
     formatBalance,
     formatUsd,
   };

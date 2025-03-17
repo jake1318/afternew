@@ -1,3 +1,5 @@
+// Swap.tsx
+
 import React, { useState, useEffect, useCallback } from "react";
 import { useWallet } from "@suiet/wallet-kit";
 import { motion } from "framer-motion";
@@ -7,21 +9,12 @@ import { formatBalance, formatUsd } from "../../utils/format";
 import { CoinBalance } from "../../types";
 import "./Swap.scss";
 
-// API URL - you can move this to an environment variable or config file
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
-// Define interface for backend response
 interface QuoteResponse {
   routeId: string;
-  coinIn: {
-    type: string;
-    amount: string;
-  };
-  coinOut: {
-    type: string;
-    amount: string;
-    formatted: string;
-  };
+  coinIn: { type: string; amount: string };
+  coinOut: { type: string; amount: string; formatted: string };
   spotPrice: number;
   priceImpact: number;
   steps: number;
@@ -29,7 +22,8 @@ interface QuoteResponse {
 
 const Swap: React.FC = () => {
   const { connected, account, signAndExecuteTransaction } = useWallet();
-  const { walletState, refreshBalances, coinPrices } = useWalletContext();
+  const { walletState, refreshBalances, coinPrices, availableCoins } =
+    useWalletContext();
 
   const [coinIn, setCoinIn] = useState<CoinBalance | null>(null);
   const [coinOut, setCoinOut] = useState<CoinBalance | null>(null);
@@ -43,39 +37,59 @@ const Swap: React.FC = () => {
   const [showCoinSelector, setShowCoinSelector] = useState<"in" | "out" | null>(
     null
   );
+  const [topPoolCoins, setTopPoolCoins] = useState<string[]>([]);
 
-  // Set default tokens when balances load
+  // Fetch top pool coin types from the backend
   useEffect(() => {
-    if (walletState.balances.length > 0 && !coinIn) {
-      // Find SUI coin as default "in" coin
-      const suiCoin = walletState.balances.find(
+    async function fetchTopPoolCoins() {
+      try {
+        const response = await fetch(`${API_URL}/topPoolCoins`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch top pool coins");
+        }
+        const data = await response.json();
+        setTopPoolCoins(data.topPoolCoins);
+      } catch (error) {
+        console.error("Error fetching top pool coins:", error);
+      }
+    }
+    fetchTopPoolCoins();
+  }, []);
+
+  // Set default tokens when wallet balances load, filtering by availableCoins
+  useEffect(() => {
+    if (
+      walletState.balances.length > 0 &&
+      availableCoins.length > 0 &&
+      !coinIn
+    ) {
+      const supportedBalances = walletState.balances.filter((b) =>
+        availableCoins.includes(b.coinType)
+      );
+      supportedBalances.sort((a, b) => {
+        const aPriority = topPoolCoins.includes(a.coinType) ? 0 : 1;
+        const bPriority = topPoolCoins.includes(b.coinType) ? 0 : 1;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        return a.symbol.localeCompare(b.symbol);
+      });
+      const suiCoin = supportedBalances.find(
         (b) => b.coinType === "0x2::sui::SUI"
       );
-
-      if (suiCoin) {
-        setCoinIn(suiCoin);
-      } else if (walletState.balances.length > 0) {
-        setCoinIn(walletState.balances[0]);
-      }
-
-      // Find a different coin for "out" (prefer USDC if available)
-      const usdcCoin = walletState.balances.find(
+      setCoinIn(suiCoin || supportedBalances[0]);
+      const usdcCoin = supportedBalances.find(
         (b) =>
           b.symbol.toLowerCase().includes("usdc") ||
           b.coinType.toLowerCase().includes("usdc")
       );
-
-      if (usdcCoin) {
-        setCoinOut(usdcCoin);
-      } else if (walletState.balances.length > 1) {
-        setCoinOut(walletState.balances[1]);
-      } else if (walletState.balances.length > 0 && !suiCoin) {
-        setCoinOut(walletState.balances[0]);
-      }
+      setCoinOut(
+        usdcCoin ||
+          (supportedBalances.length > 1
+            ? supportedBalances[1]
+            : supportedBalances[0])
+      );
     }
-  }, [walletState.balances]);
+  }, [walletState.balances, availableCoins, topPoolCoins, coinIn]);
 
-  // Get fresh quote from backend
   const fetchQuote = useCallback(async () => {
     if (
       !coinIn ||
@@ -88,18 +102,13 @@ const Swap: React.FC = () => {
       setQuoteData(null);
       return;
     }
-
     try {
       setQuoteLoading(true);
       setError(null);
-
-      // Safely parse the input amount as a number first
       const parsedAmountIn = parseFloat(amountIn);
       if (isNaN(parsedAmountIn)) {
         throw new Error("Invalid input amount");
       }
-
-      // Calculate on-chain amount
       let amountInBigInt;
       try {
         amountInBigInt = Coin.normalizeBalance(parsedAmountIn, coinIn.decimals);
@@ -107,8 +116,6 @@ const Swap: React.FC = () => {
         console.error("Error converting amount to BigInt:", err);
         throw new Error("Invalid amount format");
       }
-
-      // Get quote from backend - directly call API
       const response = await fetch(`${API_URL}/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -118,14 +125,11 @@ const Swap: React.FC = () => {
           coinInAmount: amountInBigInt.toString(),
         }),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to get quote");
       }
-
-      const quoteResponse = await response.json();
-
+      const quoteResponse: QuoteResponse = await response.json();
       setQuoteData(quoteResponse);
       setAmountOut(quoteResponse.coinOut.formatted);
     } catch (err) {
@@ -138,14 +142,12 @@ const Swap: React.FC = () => {
     }
   }, [coinIn, coinOut, amountIn]);
 
-  // Get quote when input changes
   useEffect(() => {
     const timer = setTimeout(() => {
       if (amountIn) {
         fetchQuote();
       }
     }, 500);
-
     return () => clearTimeout(timer);
   }, [coinIn, coinOut, amountIn, fetchQuote]);
 
@@ -154,12 +156,9 @@ const Swap: React.FC = () => {
       setError("Please connect your wallet and get a valid quote");
       return;
     }
-
     setLoading(true);
     setError(null);
-
     try {
-      // Get transaction from backend - directly call API
       const response = await fetch(`${API_URL}/transaction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,29 +168,19 @@ const Swap: React.FC = () => {
           slippage: slippage,
         }),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to build transaction");
       }
-
       const transactionResponse = await response.json();
-
       console.log("Transaction created successfully:", transactionResponse);
-
-      // Execute transaction
       const result = await signAndExecuteTransaction({
         transaction: transactionResponse.transaction,
       });
-
       console.log("Swap executed successfully:", result);
-
-      // Reset form and refresh balances
       setAmountIn("");
       setAmountOut("");
       setQuoteData(null);
-
-      // Refresh balances after a short delay
       setTimeout(() => {
         refreshBalances();
       }, 2000);
@@ -206,13 +195,10 @@ const Swap: React.FC = () => {
   const handleMaxClick = () => {
     if (coinIn && coinIn.balance) {
       try {
-        // Make sure we're safely converting BigInt to string
         const maxAmount = Coin.balanceWithDecimals(
           coinIn.balance,
           coinIn.decimals
         );
-
-        // Round down slightly to account for gas fees if this is SUI
         if (coinIn.coinType === "0x2::sui::SUI") {
           const adjustedMax = Math.max(0, Number(maxAmount) - 0.01);
           setAmountIn(adjustedMax.toString());
@@ -238,37 +224,42 @@ const Swap: React.FC = () => {
   const selectCoin = (coin: CoinBalance) => {
     if (showCoinSelector === "in") {
       setCoinIn(coin);
-      // If selected same as out coin, swap them
       if (coinOut && coin.coinType === coinOut.coinType) {
         setCoinOut(coinIn);
       }
     } else if (showCoinSelector === "out") {
       setCoinOut(coin);
-      // If selected same as in coin, swap them
       if (coinIn && coin.coinType === coinIn.coinType) {
         setCoinIn(coinOut);
       }
     }
     setShowCoinSelector(null);
-    // Reset when selecting new coins
     setAmountIn("");
     setAmountOut("");
     setQuoteData(null);
   };
 
-  // Safely calculate USD value
   const calculateUsdValue = (amount: string, coinType: string): string => {
     if (!amount || !coinPrices || !coinPrices[coinType]) {
       return formatUsd(0);
     }
-
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount)) {
       return formatUsd(0);
     }
-
     return formatUsd(numAmount * coinPrices[coinType]);
   };
+
+  // Prepare sorted balances: filter wallet balances to only include coins from availableCoins and sort so that topPoolCoins appear first.
+  const sortedBalances = walletState.balances
+    .filter((coin) => availableCoins.includes(coin.coinType))
+    .sort((a, b) => {
+      const aPriority = topPoolCoins.includes(a.coinType) ? 0 : 1;
+      const bPriority = topPoolCoins.includes(b.coinType) ? 0 : 1;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return a.symbol.localeCompare(b.symbol);
+    });
+
   return (
     <div className="swap-page">
       <motion.div
@@ -312,7 +303,6 @@ const Swap: React.FC = () => {
                 </span>
               )}
             </div>
-
             <div className="swap-input-content">
               <input
                 type="number"
@@ -323,7 +313,6 @@ const Swap: React.FC = () => {
                 min="0"
                 step="any"
               />
-
               <div className="token-selector">
                 {coinIn ? (
                   <button
@@ -339,11 +328,9 @@ const Swap: React.FC = () => {
                     onClick={() => setShowCoinSelector("in")}
                     disabled={!connected}
                   >
-                    Select Token
-                    <span className="dropdown-icon">▼</span>
+                    Select Token <span className="dropdown-icon">▼</span>
                   </button>
                 )}
-
                 {coinIn && (
                   <button className="max-button" onClick={handleMaxClick}>
                     MAX
@@ -351,7 +338,6 @@ const Swap: React.FC = () => {
                 )}
               </div>
             </div>
-
             {coinIn && coinPrices[coinIn.coinType] && amountIn && (
               <div className="swap-input-footer">
                 ≈ {calculateUsdValue(amountIn, coinIn.coinType)}
@@ -372,7 +358,6 @@ const Swap: React.FC = () => {
                 </span>
               )}
             </div>
-
             <div className="swap-input-content">
               <input
                 type="text"
@@ -380,7 +365,6 @@ const Swap: React.FC = () => {
                 value={quoteLoading ? "Loading..." : amountOut}
                 disabled
               />
-
               <div className="token-selector">
                 {coinOut ? (
                   <button
@@ -396,13 +380,11 @@ const Swap: React.FC = () => {
                     onClick={() => setShowCoinSelector("out")}
                     disabled={!connected}
                   >
-                    Select Token
-                    <span className="dropdown-icon">▼</span>
+                    Select Token <span className="dropdown-icon">▼</span>
                   </button>
                 )}
               </div>
             </div>
-
             {coinOut && coinPrices[coinOut.coinType] && amountOut && (
               <div className="swap-input-footer">
                 ≈ {calculateUsdValue(amountOut, coinOut.coinType)}
@@ -422,7 +404,6 @@ const Swap: React.FC = () => {
                   {coinOut?.symbol}
                 </span>
               </div>
-
               {quoteData.priceImpact !== null && (
                 <div className="detail-item">
                   <span>Price Impact</span>
@@ -433,7 +414,6 @@ const Swap: React.FC = () => {
                   </span>
                 </div>
               )}
-
               <div className="detail-item">
                 <span>Slippage Tolerance</span>
                 <span>{slippage}%</span>
@@ -471,10 +451,9 @@ const Swap: React.FC = () => {
             {loading ? "Swapping..." : "Swap"}
           </button>
 
-          {/* Refresh quote button - useful when debugging */}
           <button
             className="refresh-button"
-            onClick={() => fetchQuote()}
+            onClick={fetchQuote}
             disabled={quoteLoading || !amountIn || !coinIn || !coinOut}
             style={{
               marginTop: "10px",
@@ -503,9 +482,8 @@ const Swap: React.FC = () => {
                   ✕
                 </button>
               </div>
-
               <div className="coin-list">
-                {walletState.balances.map((coin) => (
+                {sortedBalances.map((coin) => (
                   <div
                     key={coin.coinType}
                     className="coin-item"
